@@ -1,0 +1,143 @@
+#!/bin/bash
+
+FILINGDIR=/store/Personal-Borek/Obrazky/Vlastni-small/digital
+INDEXES=Indexes
+
+#------------------------------------------------------------------------------
+#--- SANITY CHECKS ------------------------------------------------------------
+#------------------------------------------------------------------------------
+
+#--- target checks
+
+if [ ! -d "$FILINGDIR" ]; then
+  echo "Filing directory does not exist"
+  exit 1
+fi
+
+if [ ! -d "$FILINGDIR/$INDEXES" ]; then
+  echo "Indexes directory does not exist"
+  exit 1
+fi
+
+#--- local directory checks
+
+if [ ! -f "popis.txt" ]; then
+  echo "Description file 'popis.txt' is missing" 
+  exit 1
+fi
+
+if [ ! -d "small" ]; then
+  echo "Downscaled images directory 'small' is missing"
+  exit 1
+fi
+
+IMAGES=$(ls *.CR2 2>/dev/null | wc -l)
+if [ "$IMAGES" -eq 0 ]; then
+  echo "There are 0 images"
+  exit 1
+fi
+
+DSIMAGES=$(ls small/*.jpg 2>/dev/null | wc -l)
+if [ "$DSIMAGES" -eq 0 ]; then
+  echo "There are 0 downscaled images"
+  exit 1
+fi
+
+if [ "$IMAGES" -ne "$DSIMAGES" ]; then
+  echo "Number of images ($IMAGES) does not match number of downscaled images ($DSIMAGES)"
+  exit 1
+fi
+
+FIRSTIMAGE=$(ls *.CR2|head -1)
+FILEBASE=${FIRSTIMAGE:0:8}
+DIRNAME=${FIRSTIMAGE:0:4}-${FIRSTIMAGE:4:2}-${FIRSTIMAGE:6:2}
+YEAR=${FIRSTIMAGE:0:4}
+
+if [ ! -d "$FILINGDIR/$YEAR" ]; then
+  echo "Filing subdir $YEAR does not exist, create it first"
+  exit 1
+fi
+
+if [ -d "$FILINGDIR/$YEAR/$DIRNAME" ]; then
+  echo "Filing subdir $YEAR/$DIRNAME already exists, remove it first"
+  exit 1
+fi
+
+CONTACTS=$(ls index-${FILEBASE}-[0-9][0-9][0-9].jpg 2>/dev/null | wc -l)
+
+if [ "$CONTACTS" -eq 0 ]; then
+  echo "Contact images missing"
+  exit 1
+fi
+
+#------------------------------------------------------------------------------
+#--- USER FEEDBACK ------------------------------------------------------------
+#------------------------------------------------------------------------------
+
+echo
+echo "Number of images:   $IMAGES"
+echo "Number of contacts: $CONTACTS"
+echo "Base filename:      $FILEBASE"
+echo "Directory name:     $DIRNAME"
+echo "Year:               $YEAR"
+echo
+
+echo "Filing directory (files):"
+echo "$FILINGDIR/$YEAR/$DIRNAME"
+echo
+
+echo "Filing directory (indexes):"
+echo "$FILINGDIR/$INDEXES/$YEAR"
+echo
+
+read -p "Continue? (y/n) " -n 1
+echo
+
+if [ "$REPLY" != 'y' ]; then
+  exit 0
+fi
+
+echo
+
+#------------------------------------------------------------------------------
+#--- CREATE A MD5 FILE --------------------------------------------------------
+#------------------------------------------------------------------------------
+
+echo -n 'Creating md5sum.txt ... '
+rm -f '_md5sum.txt'
+md5sum -b *.* >_md5sum.txt
+echo 'done'
+
+#------------------------------------------------------------------------------
+#--- CREATE SUBDIR ------------------------------------------------------------
+#------------------------------------------------------------------------------
+
+echo -n "Creating image directory $YEAR/$DIRNAME ... "
+mkdir "$FILINGDIR/$YEAR/$DIRNAME"
+echo "done"
+
+#------------------------------------------------------------------------------
+#--- COPY DOWNSCALED IMAGES ---------------------------------------------------
+#------------------------------------------------------------------------------
+
+echo -n "Copying $DSIMAGES images to $YEAR/$DIRNAME ... "
+cp --reflink=auto small/*.jpg "$FILINGDIR/$YEAR/$DIRNAME/"
+echo "done"
+
+echo -n "Copying 'popis.txt' to $YEAR/$DIRNAME ... "
+cp --reflink=auto popis.txt "$FILINGDIR/$YEAR/$DIRNAME/"
+echo "done"
+
+#------------------------------------------------------------------------------
+#--- COPY CONTACTS ------------------------------------------------------------
+#------------------------------------------------------------------------------
+
+echo -n "Copying $CONTACTS contact image(s) to $YEAR ... "
+cp --reflink=auto index-${FILEBASE}-[0-9][0-9][0-9].jpg "$FILINGDIR/$INDEXES/$YEAR/"
+echo "done"
+
+#------------------------------------------------------------------------------
+#--- FINISH -------------------------------------------------------------------
+#------------------------------------------------------------------------------
+
+echo
